@@ -67,7 +67,7 @@ if in_role?(:web)
     nginx_config_file = "/etc/ec2onrails/nginx_upstream_members"
     unless files_written.index(nginx_config_file)
       File.open(nginx_config_file, "w") do |f|
-        f << "upstream mongrel{\n"
+        f << "upstream thinserver{\n"
         roles[:app].each do |address|
           web_port_range.each do |port|
             f << "\tserver #{address}:#{port};\n"

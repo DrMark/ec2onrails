@@ -39,7 +39,7 @@ FileUtils.copy(DEFAULT_CONFIG_LOC, "#{DEFAULT_CONFIG_LOC}.pre_optimized") unless
 #      to the db.  This ratio is not the absolute ratio but is used as a guideline
 # 
 #    * how many cores does the slice have.  Then, based upon the Engineyard
-#      recommendation that upto 4 mongrels generally take up one core, compute
+#      recommendation that upto 4 thin servers generally take up one core, compute
 #      the number of estimated available cores
 #
 #    * how many max connections are allowed, and how many database tables exist
@@ -48,7 +48,7 @@ FileUtils.copy(DEFAULT_CONFIG_LOC, "#{DEFAULT_CONFIG_LOC}.pre_optimized") unless
 #default is one core
 num_cores = `cat /proc/cpuinfo`.find_all{|o| o =~ /^\s*processor\s+/}.size rescue 1
 #if also running app, just search for ruby because that will 
-#include mongrel but also daemons and other scripts
+#include thin but also daemons and other scripts
 num_ruby_instances = local_roles.include?(:app) ? `ps ax | grep ruby | grep -v 'grep ruby'`.split("\n").size : 0
 avail_cores = num_cores - num_ruby_instances/4
 avail_cores = 0 if avail_cores.nil? || avail_cores < 0

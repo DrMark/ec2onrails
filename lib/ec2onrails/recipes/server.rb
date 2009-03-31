@@ -58,7 +58,7 @@ Capistrano::Configuration.instance(:must_exist).load do
 
       desc <<-DESC
         Change the default value of RAILS_ENV on the server. Technically
-        this changes the server's mongrel config to use a different value
+        this changes the server's thin config to use a different value
         for "environment". The value is specified in :rails_env.
         Be sure to do deploy:restart after this.
       DESC

@@ -26,7 +26,7 @@ require 'yaml'
 module Ec2onrails
   module RolesHelper
     ROLES_FILE = "/etc/ec2onrails/roles.yml"
-    MONGREL_CONF_FILE = "/etc/mongrel_cluster/app.yml"
+    THIN_CONF_FILE = "/etc/thin/app.yml"
 
     def local_address
       @local_address ||= get_metadata "local-ipv4"
@@ -116,11 +116,11 @@ module Ec2onrails
     end      
 
     def web_starting_port
-      mongrel_config['port'].to_i rescue 8000
+      thinserver_config['port'].to_i rescue 8000
     end
 
     def web_num_instances
-      mongrel_config['servers'].to_i rescue 6
+      thinserver_config['servers'].to_i rescue 6
     end
 
     def web_port_range
@@ -128,29 +128,29 @@ module Ec2onrails
     end
     
     def server_environment
-      mongrel_config["environment"]
+      thinserver_config['environment']
     end
     
     def user
-      mongrel_config['user']
+      thinserver_config['user']
     end
 
     def group
-      mongrel_config['group']
+      thinserver_config['group']
     end
     
     def application_root
-      mongrel_config['cwd']
+      thinserver_config['chdir']
     end    
     
     def pid_file
-      "#{application_root}/#{mongrel_config['pid_file']}"
+      "#{application_root}/#{thinserver_config['pid']}"
     end
 
     private
 
-    def mongrel_config
-      @mongrel_config ||= YAML::load_file(MONGREL_CONF_FILE)
+    def thinserver_config
+      @thinserver_config ||= YAML::load_file(THIN_CONF_FILE)
     end
 
   end

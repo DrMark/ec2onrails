@@ -40,7 +40,7 @@ RewriteRule ^([^.]+)$ $1.html [QSA]
 
 # Redirect all non-static requests to cluster
 RewriteCond %{DOCUMENT_ROOT}/%{REQUEST_FILENAME} !-f
-RewriteRule ^/(.*)$ balancer://mongrel_cluster%{REQUEST_URI} [P,QSA,L]
+RewriteRule ^/(.*)$ balancer://thinserver%{REQUEST_URI} [P,QSA,L]
 
 # Deflate
 AddOutputFilterByType DEFLATE text/html text/plain text/xml application/xml application/xhtml+xml text/javascript application/x-javascript text/css

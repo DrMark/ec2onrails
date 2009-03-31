@@ -51,7 +51,7 @@ Capistrano::Configuration.instance.load do
   set :use_sudo, false
   set :user, "app"
 
-  #in case any changes were made to the configs, like changing the number of mongrels
+  #in case any changes were made to the configs, like changing the number of thin servers
   before "deploy:cold", "ec2onrails:setup"
   
   after "deploy:symlink", "ec2onrails:server:set_roles", "ec2onrails:server:init_services"

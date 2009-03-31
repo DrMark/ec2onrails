@@ -65,7 +65,7 @@ end
 
 # app role:
 if in_role?(:app)
-  start(:app, "mongrel", "mongrel_rails")
+  start(:app, "thin")
 else
-  stop(:app, "mongrel", "mongrel_rails")
+  stop(:app, "thin")
 end

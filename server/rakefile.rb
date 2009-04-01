@@ -52,6 +52,7 @@ end
   cron
   curl
   flex
+  g++
   gcc
   git-core
   irb

@@ -31,7 +31,7 @@
 
 require "fileutils"
 
-EC2UBUNTU_VERSION = 148
+EC2UBUNTU_VERSION = 149
 
 unless File.exist? "/mnt/ec2ubuntu"
   puts "Installing yum..."
@@ -45,10 +45,10 @@ unless system "which rake"
   puts "Installing rake..."
   
   FileUtils.cd "/tmp" do
-    system "wget http://rubyforge.org/frs/download.php/29752/rake-0.8.1.tgz"
-    system "tar xvf rake-0.8.1.tgz"
+    system "wget http://rubyforge.org/frs/download.php/56369/rake-0.8.5.tgz"
+    system "tar xvf rake-0.8.5.tgz"
   end
-  FileUtils.cd "/tmp/rake-0.8.1" do
+  FileUtils.cd "/tmp/rake-0.8.5" do
     system "ruby install.rb"
   end
 end

@@ -56,8 +56,9 @@ http {
   tcp_nodelay       on;
   # output compression saves bandwidth 
   gzip              on;
-  gzip_http_version 1.0;
-  gzip_comp_level   5;
+  gzip_http_version 1.1;
+  gzip_vary on;
+  gzip_comp_level   6;
   gzip_proxied      any;
   gzip_types        text/plain \
                     text/html \
@@ -68,6 +69,12 @@ http {
                     application/xml \
                     application/xml+rss \
                     text/javascript;
+  # make sure gzip does not lose large gzipped js or css files
+  # see http://blog.leetsoft.com/2007/7/25/nginx-gzip-ssl
+  gzip_buffers 16 8k;
+
+  # Disable gzip for certain browsers. IE6 prior to SP2 doesn't handle gzip properly.
+  gzip_disable “MSIE [1-6].(?!.*SV1)”;
   
   # the server directive is nginx's virtual host directive.
   server {

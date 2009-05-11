@@ -14,7 +14,6 @@ ssh_options[:keys] = ["#{ENV['HOME']}/.ssh/your-ec2-key"]
 # any other name (in case you have your own DNS alias) or it won't
 # be able to resolve to the internal IP address.
 role :web,      "ec2-12-xx-xx-xx.z-1.compute-1.amazonaws.com"
-role :app,      "ec2-34-xx-xx-xx.z-1.compute-1.amazonaws.com"
 role :memcache, "ec2-12-xx-xx-xx.z-1.compute-1.amazonaws.com"
 role :db,       "ec2-56-xx-xx-xx.z-1.compute-1.amazonaws.com", :primary => true
 # role :db,       "ec2-56-xx-xx-xx.z-1.compute-1.amazonaws.com", :primary => true, :ebs_vol_id => 'vol-12345abc'
@@ -60,9 +59,6 @@ set :ec2onrails_config, {
   # NOTE: if you are using rails 2.1, ec2onrails calls 'sudo rake gem:install',
   # which will install gems defined in your rails configuration
   :rubygems => ["rmagick", "rfacebook -v 0.9.7"],
-  
-  # Defines the web proxy that will be used.  Choices are :apache or :nginx
-  :web_proxy_server => :apache,
   
   # extra security measures are taken if this is true, BUT it makes initial
   # experimentation and setup a bit tricky.  For example, if you do not

@@ -17,25 +17,16 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-# This script is meant to be run by build-ec2onrails.sh, which is run by
+# This script is meant to be run by rakefile-wrapper, which is run by
 # Eric Hammond's Ubuntu build script: http://alestic.com/
-# e.g.:
-# bash /mnt/ec2ubuntu-build-ami --script /mnt/ec2onrails/server/build-ec2onrails.sh ...
-
-
+# See the README file for details
 
 require "rake/clean"
 require 'yaml'
 require 'erb'
 require "#{File.dirname(__FILE__)}/../lib/ec2onrails/version"
 
-if `whoami`.strip != 'root'
-  raise "Sorry, this buildfile must be run as root."
-end
-
 # package notes:
-# * aptitude:       much better package installation system, especially around 
-#                   upgrades and package dependencies
 # * gcc:            libraries needed to compile c/c++ files from source
 # * libmysqlclient-dev : provide mysqlclient-dev libs, needed for DataObject gems
 # * nano/vim/less:  simle file editors and viewer
@@ -45,8 +36,6 @@ end
   
 @packages = %w(
   adduser
-  apache2
-  aptitude
   bison
   ca-certificates
   cron
@@ -56,12 +45,9 @@ end
   git-core
   irb
   less
-  libdbm-ruby
-  libgdbm-ruby
+  libmysqlclient-dev
   libmysql-ruby
-  libopenssl-ruby
-  libreadline-ruby
-  libruby
+  libpcre3-dev
   libssl-dev
   libyaml-ruby
   libzlib-ruby
@@ -77,20 +63,13 @@ end
   rdoc
   ri
   rsync
-  ruby
-  ruby1.8-dev
+  ruby-full
   subversion
   sysstat
   unzip
   vim
   wget
   xfsprogs
-)
-
-# HACK: some packages just fail with apt-get but work fine
-#       with aptitude.  These generally are virtual packages
-@aptitude_packages = %w(
-  libmysqlclient-dev
 )
 
 # NOTE: the amazon-ec2 gem is now at github, maintained by
@@ -103,10 +82,10 @@ end
   "god",
   "RubyInline",
   "memcache-client",
-  "mongrel",
-  "mongrel_cluster",
   "optiflag",
+  "passenger",
   "rails",
+  "rails -v '~> 2.3.2'",
   "rails -v '~> 2.2.2'",
   "rails -v '~> 2.1.2'",
   "rails -v '~> 2.0.5'",
@@ -122,49 +101,90 @@ end
 task :default => :configure
 
 desc "Removes all build files"
-task :clean_all do |t|
+task :clean_all => :require_root do |t|
+  puts "Unmounting proc and dev from #{@build_root}..."
+  run "umount #{@build_root}/ubuntu/proc", true
+  run "umount #{@build_root}/ubuntu/dev", true
+
+  puts "Removing #{@build_root}..."
   rm_rf @build_root
 end
 
-desc "Use apt-get to install required packages inside the image's filesystem"
-task :install_packages do |t|
+task :require_root do |t|
+  if `whoami`.strip != 'root'
+    raise "Sorry, this buildfile must be run as root."
+  end
+end
+
+desc "Use aptitude to install required packages inside the image's filesystem"
+task :install_packages => :require_root do |t|
   unless_completed(t) do
     ENV['DEBIAN_FRONTEND'] = 'noninteractive'
     ENV['LANG'] = ''
-    run_chroot "apt-get install -y #{@packages.join(' ')}"
-    run_chroot "apt-get clean"
-    
-    #lets run the aptitude-only packages
-    run_chroot "aptitude install -y #{@aptitude_packages.join(' ')}"
+    run_chroot "apt-get autoremove -y"
+    run_chroot "aptitude update"
+    run_chroot "aptitude install -y #{@packages.join(' ')}"
     run_chroot "aptitude clean"
   end
 end
 
 desc "Install required ruby gems inside the image's filesystem"
-task :install_gems => [:install_packages] do |t|
+task :install_gems => [:require_root, :install_packages] do |t|
   unless_completed(t) do
-    run_chroot "sh -c 'cd /tmp && wget -q http://rubyforge.org/frs/download.php/45905/rubygems-1.3.1.tgz && tar zxf rubygems-1.3.1.tgz'"
-    run_chroot "sh -c 'cd /tmp/rubygems-1.3.1 && ruby setup.rb'"
+    run_chroot "sh -c 'cd /tmp && wget -q http://rubyforge.org/frs/download.php/55066/rubygems-1.3.2.tgz && tar zxf rubygems-1.3.2.tgz'"
+    run_chroot "sh -c 'cd /tmp/rubygems-1.3.2 && ruby setup.rb'"
     run_chroot "ln -sf /usr/bin/gem1.8 /usr/bin/gem"
     #NOTE: this will update to rubygems 1.3 and beyond... 
     #      this was broken in rubygems 1.1 and 1.2, but it looks like they fixed it
     run_chroot "gem update --system --no-rdoc --no-ri"
     run_chroot "gem update --no-rdoc --no-ri"
     run_chroot "gem sources -a http://gems.github.com"
-#    run_chroot "cp /root/.gemrc /home/app" # so the app user also has access to gems.github.com
     @rubygems.each do |g|
       run_chroot "gem install #{g} --no-rdoc --no-ri"
     end
   end
 end
 
+desc "Install nginx from source"
+task :install_nginx => [:require_root, :install_packages, :install_gems] do |t|
+  unless_completed(t) do
+    nginx_version = "nginx-0.6.36"
+    nginx_tar = "#{nginx_version}.tar.gz"
+
+    nginx_img = "http://sysoev.ru/nginx/#{nginx_tar}"
+    fair_bal_img = "http://github.com/gnosek/nginx-upstream-fair/tarball/master"
+    src_dir = "/tmp/src/nginx"
+    # Make sure the dir is created but empty...lets start afresh
+    run_chroot "mkdir -p -m 755 #{src_dir}/ &&  rm -rf #{src_dir}/*" 
+    run_chroot "sh -c 'cd #{src_dir} && wget -q #{nginx_img} && tar -xzf #{nginx_tar}'"
+
+    run_chroot "sh -c 'cd #{src_dir}/#{nginx_version} && \
+       ./configure \
+         --sbin-path=/usr/sbin \
+         --conf-path=/etc/nginx/nginx.conf \
+         --pid-path=/var/run/nginx.pid \
+         --with-http_ssl_module \
+         --with-http_stub_status_module \
+         --add-module=`/usr/bin/passenger-config --root`/ext/nginx && \
+       make && \
+       make install'"
+  end
+end
+
+desc "Install Ubuntu packages, download and compile other software, and install gems"
+task :install_software => [:require_root, :install_gems, :install_packages, :install_nginx]
+
 desc "Configure the image"
-task :configure => [:install_gems] do |t|
+task :configure => [:require_root, :install_software] do |t|
   unless_completed(t) do
     sh("cp -r files/* #{@fs_dir}")
     replace("#{@fs_dir}/etc/motd.tail", /!!VERSION!!/, "Version #{@version}")
-        
+
+    run_chroot "/usr/sbin/adduser --system --group --disabled-login --no-create-home nginx"
     run_chroot "/usr/sbin/adduser --gecos ',,,' --disabled-password app"
+    run_chroot "/usr/sbin/addgroup rootequiv"
+
+    run_chroot "cp /root/.gemrc /home/app" # so the app user also has access to gems.github.com
         
     run "echo '. /usr/local/ec2onrails/config' >> #{@fs_dir}/root/.bashrc"
     run "echo '. /usr/local/ec2onrails/config' >> #{@fs_dir}/home/app/.bashrc"
@@ -173,19 +193,22 @@ task :configure => [:install_gems] do |t|
       rm_rf "#{@fs_dir}/var/log/#{f}"
       run_chroot "ln -sf /mnt/log/#{f} /var/log/#{f}"
     end
+
+    # Create symlinks to run scripts on startup
+    run_chroot "update-rc.d ec2-first-startup start 91 S ."
+    run_chroot "update-rc.d ec2-every-startup start 92 S ."
     
-    run "touch #{@fs_dir}/ec2onrails-first-boot"
+    # Disable the services that will be managed by god, depending on the roles
+    %w(nginx mysql memcached).each do |service|
+      run_chroot "update-rc.d -f #{service} remove"
+      run_chroot "update-rc.d #{service} stop 20 2 3 4 5 ."
+    end
     
-    # TODO find out the most correct solution here, there seems to be a bug in
-    # both feisty and gutsy where the dhcp daemon runs as dhcp but the dir
-    # that it tries to write to is owned by root and not writable by others.
-    # *** Do we still need this? The problem was constant messages in the syslog
-    # after the first DHCP lease expired (after 12 hours or so).
-    # We can probably assume Eric's base image does the right thing.
-    run_chroot "chown -R dhcp /var/lib/dhcp3"
+    # God is started by upstart so that it will be restarted automatically if it dies,
+    # see /etc/event.d/god
     
-    #make sure that god is setup to reboot at startup
-    run_chroot "update-rc.d god defaults 98"
+    # Create the mail aliases db
+    run_chroot "postalias /etc/aliases"
   end
 end
 
@@ -215,20 +238,6 @@ def run(command, ignore_error = false)
   result = system command
   raise("error: #{$?}") unless result || ignore_error
 end
-
-# def mount(type, mount_point)
-#   unless mounted?(mount_point)
-#     puts
-#     puts "********** Mounting #{type} on #{mount_point}..."
-#     puts
-#     run "mount -t #{type} none #{mount_point}"
-#   end
-# end
-# 
-# def mounted?(mount_point)
-#   mount_point_regex = mount_point.gsub(/\//, "\\/")
-#   `mount`.select {|line| line.match(/#{mount_point_regex}/) }.any?
-# end
 
 def replace_line(file, newline, linenum)
   contents = File.open(file, 'r').readlines

@@ -75,6 +75,7 @@ Capistrano::Configuration.instance.load do
           begin
             run cmd
           rescue Exception => e
+              # TODO this is a bit confusing, the command can fail for other reasons, let's improve the message
               puts "  CONTINUING: this command was previously run, so continuing"
           end
         end
@@ -154,8 +155,8 @@ Capistrano::Configuration.instance.load do
         prev_created = true if !quiet_capture("mount | grep -inr '#{mysql_dir_root}' || echo ''").empty?
 
         unless no_force && (vol_id.nil? || vol_id.empty?)
-          zone = quiet_capture("/usr/local/ec2onrails/bin/ec2_meta_data.rb -key 'placement/availability-zone'")
-          instance_id = quiet_capture("/usr/local/ec2onrails/bin/ec2_meta_data.rb -key 'instance-id'")
+          zone = quiet_capture("/usr/local/ec2onrails/bin/ec2_meta_data -key 'placement/availability-zone'")
+          instance_id = quiet_capture("/usr/local/ec2onrails/bin/ec2_meta_data -key 'instance-id'")
 
           unless prev_created
             puts "creating new ebs volume...."
@@ -282,11 +283,11 @@ FILE
         (But don't enable monitoring on it.)
       DESC
       task :start, :roles => :db do
-        sudo "god start db"
+        sudo "god start db_primary"
       end
 
       task :stop, :roles => :db do
-        sudo "god stop db"
+        sudo "god stop db_primary"
       end
       
       
@@ -330,7 +331,7 @@ FILE
         "database-archive/<timestamp>/dump.sql.gz".
       DESC
       task :archive, :roles => :db do
-        run "/usr/local/ec2onrails/bin/backup_app_db.rb --bucket #{cfg[:archive_to_bucket]} --dir #{cfg[:archive_to_bucket_subdir]}"
+        run "/usr/local/ec2onrails/bin/backup_app_db --bucket #{cfg[:archive_to_bucket]} --dir #{cfg[:archive_to_bucket_subdir]}"
       end
       
       desc <<-DESC
@@ -339,7 +340,7 @@ FILE
         expected to be the default, "mysqldump.sql.gz".
       DESC
       task :restore, :roles => :db do
-        run "/usr/local/ec2onrails/bin/restore_app_db.rb --bucket #{cfg[:restore_from_bucket]} --dir #{cfg[:restore_from_bucket_subdir]}"
+        run "/usr/local/ec2onrails/bin/restore_app_db --bucket #{cfg[:restore_from_bucket]} --dir #{cfg[:restore_from_bucket_subdir]}"
       end
       
       desc <<-DESC
@@ -349,7 +350,7 @@ FILE
       DESC
       task :init_backup, :roles => :db do
         server.allow_sudo do
-          sudo "/usr/local/ec2onrails/bin/backup_app_db.rb --reset"
+          sudo "/usr/local/ec2onrails/bin/backup_app_db --reset"
         end
       end
       
@@ -361,7 +362,7 @@ FILE
       task :optimize, :roles => :db do
         if !quiet_capture("test -e /tmp/optimize_db_flag && echo 'file exists'").empty?
           begin
-            sudo "/usr/local/ec2onrails/bin/optimize_mysql.rb"
+            sudo "/usr/local/ec2onrails/bin/optimize_mysql"
           ensure
             sudo "rm -rf /tmp/optimize_db_flag" #remove so we cannot run again
           end

@@ -175,7 +175,7 @@ h4. Getting started...
 --secret-key AMAZON_SECRET_KEY \
 --private-key /mnt/pk-*.pem \
 --cert /mnt/cert-*.pem \
---script /mnt/ec2onrails/server/build-ec2onrails.sh</code>
+--script /mnt/ec2onrails/server/build</code>
 
 h2. Mailing lists
 

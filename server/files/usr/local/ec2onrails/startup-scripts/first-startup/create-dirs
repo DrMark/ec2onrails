@@ -36,6 +36,7 @@ make_dir /mnt/log
 make_dir /mnt/log/fsck
 make_dir /mnt/log/god
 make_dir /mnt/log/mysql   mysql:mysql
+make_dir /mnt/log/news
 make_dir /mnt/log/nginx   nginx:nginx
 
 make_dir /mnt/tmp

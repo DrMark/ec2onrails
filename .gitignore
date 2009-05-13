@@ -1,5 +1,7 @@
-.DS_STORE
+.DS_Store
 pkg/*
 tmp/*
 .loadpath
 .project
+Manifest
+

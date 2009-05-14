@@ -27,46 +27,50 @@ module Ec2onrails
     INSTALLED_MANIFEST_FILE = "/etc/ec2onrails/system_files/#{SystemFilesManifest::MANIFEST_FILE_NAME}"
 
     def install_system_files(from_dir)
-      if File.directory?(from_dir)
-        uninstall_system_files
+      uninstall_system_files
+      
+      unless File.directory?(from_dir)
+        puts "no system files to install, #{from_dir} doesn't exist or is not a directory."
+        return
+      end
+        
+      puts "installing system files from #{from_dir}..."
+      src_manifest = File.join from_dir, SystemFilesManifest::MANIFEST_FILE_NAME
 
-        puts "installing system files from #{from_dir}..."
-        src_manifest = File.join from_dir, SystemFilesManifest::MANIFEST_FILE_NAME
-
-        @manifest = nil
-        if File.exists? src_manifest
-          @manifest = Ec2onrails::SystemFilesManifest.new(from_dir)
-          FileUtils.cp src_manifest, INSTALLED_MANIFEST_FILE
-        end
-
-        FileUtils.cd from_dir do
-          Dir.glob("**/*").each do |f|
-            unless File.directory?(f) || File.basename(f) == SystemFilesManifest::MANIFEST_FILE_NAME
-              dest = File.join("/", f)
-              backup(dest)
-              make_dirs(dest)
-              install_file(f, dest, @manifest)
-            end
+      @manifest = nil
+      if File.exists? src_manifest
+        @manifest = Ec2onrails::SystemFilesManifest.new(from_dir)
+        FileUtils.cp src_manifest, INSTALLED_MANIFEST_FILE
+      end
+      
+      FileUtils.cd from_dir do
+        Dir.glob("**/*").each do |f|
+          unless File.directory?(f) || File.basename(f) == SystemFilesManifest::MANIFEST_FILE_NAME
+            dest = File.join("/", f)
+            backup(dest)
+            make_dirs(dest)
+            install_file(f, dest, @manifest)
           end
         end
-      else
-        puts "directory #{from_dir} not found"
       end
     end
     
     def uninstall_system_files
-      if File.exist? INSTALLED_MANIFEST_FILE
-        puts "uninstalling system files..."
-        @manifest = Ec2onrails::SystemFilesManifest.new(INSTALLED_MANIFEST_FILE)
-        @manifest.filenames.each do |f|
-          file = File.join("/", f)
-          unless File.directory?(file)
-            FileUtils.rm file
-            restore_backup_of file
-          end
-        end
-        FileUtils.rm INSTALLED_MANIFEST_FILE
+      unless File.exist? INSTALLED_MANIFEST_FILE
+        puts "not uninstalling system files, #{INSTALLED_MANIFEST_FILE} doesn't exist."
+        return
       end
+
+      puts "uninstalling system files..."
+      @manifest = Ec2onrails::SystemFilesManifest.new(INSTALLED_MANIFEST_FILE)
+      @manifest.filenames.each do |f|
+        file = File.join("/", f)
+        unless File.directory?(file)
+          FileUtils.rm file
+          restore_backup_of file
+        end
+      end
+      FileUtils.rm INSTALLED_MANIFEST_FILE
     end
     
     def backup(f)

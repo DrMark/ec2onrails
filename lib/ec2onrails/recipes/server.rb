@@ -385,13 +385,13 @@ Capistrano::Configuration.instance(:must_exist).load do
         Set the email address that mail to the app user forwards to.
       DESC
       task :set_mail_forward_address do
-				allow_sudo do
-					if cfg[:mail_forward_address]
-						run "echo '#{cfg[:mail_forward_address]}' >> ~/.forward"
-						sudo "chown root:root ~/.forward"
-						sudo "mv ~/.forward /root/"
-					end
-				end
+        if cfg[:mail_forward_address]
+          allow_sudo do
+            run "echo '#{cfg[:mail_forward_address]}' > /tmp/.forward"
+            sudo "cp /tmp/.forward /root/.forward"
+            run "rm /tmp/.forward"
+          end
+        end
       end
     
       desc <<-DESC

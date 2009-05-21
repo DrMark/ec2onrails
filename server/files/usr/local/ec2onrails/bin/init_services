@@ -37,6 +37,7 @@ end
 roles.keys.each do |role|
   if in_role? role
     start role
+    sleep 10
   else
     stop role
   end

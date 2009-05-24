@@ -11,7 +11,7 @@ God.watch do |w|
 
   default_configurations(w)
 
-  restart_if_resource_hog(w, :memory_usage => 250.megabytes) do |restart|
+  restart_if_resource_hog(w, :memory_usage => 650.megabytes) do |restart|
     restart.condition(:http_response_code) do |c|
       c.host = '127.0.0.1'
       c.port = 80

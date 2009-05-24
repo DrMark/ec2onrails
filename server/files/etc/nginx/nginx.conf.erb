@@ -1,14 +1,14 @@
 user  nginx nginx;
-worker_processes  6;
+worker_processes  4;
 pid /var/run/nginx.pid;
 
 events {
-  worker_connections  1024;
+  worker_connections  4096;
   use epoll; # linux only!
 }
 
 http {
-  # global passenger settings
+  ## Global Passenger settings
   passenger_root <%= `/usr/bin/passenger-config --root`.strip %>;
   passenger_default_user app;
   passenger_pool_idle_time 0;
@@ -18,32 +18,42 @@ http {
   # We leave passenger_max_pool_size at the default for now. (It might
   # eventually be an ERB variable that can be set automatically based on the
   # instance type and what roles it's in.)
-  # passenger_max_pool_size 6;
-  
+  passenger_max_pool_size 7;
+
+  ## MIME types
   include /etc/nginx/mime.types;
-  
+
   # set a default type for the rare situation that
   # nothing matches from the mime-type include
   default_type  application/octet-stream;
 
-  # configure log format
-  log_format main '$remote_addr [$time_local] '
-                  '"$scheme $host $request" $status $body_bytes_sent "$http_referer" '
-                  '"$http_user_agent" "$http_x_forwarded_for" '
-                  '($request_time)';
-  
-  access_log  /mnt/log/nginx/access.log  main;
+  ## Size Limits: important to reduce DOS attacks
+  client_body_buffer_size   8k;
+  client_header_buffer_size 5k;
+  large_client_header_buffers 1 2k;
+  client_max_body_size 50M;  # Set the max size for file uploads to 50Mb
 
-  # main error log - Do not comment out. If you do not want the log file set this to /dev/null
-  # use debug instead of notice if you want additional information
-  error_log  /mnt/log/nginx/error.log notice;
+  ## Timeouts
+  client_body_timeout   60; # increase if you allow large uploads
+  client_header_timeout 5;
+  keepalive_timeout     10 5;
+  send_timeout          5;
 
-  sendfile on;
+  ## General Options
+  ignore_invalid_headers   on;
+  limit_zone jailhouse $binary_remote_addr 1m;
+  recursive_error_pages    on;
+  server_tokens off;  # do not show the nginx version number in the server header
+  server_name_in_redirect off;
+  sendfile                 on;
 
-  tcp_nopush        on;
-  tcp_nodelay       on;
+  ## TCP options
+  tcp_nopush  on;
+  tcp_nodelay on;
+
+  ## Compression options
   gzip              on;
-  gzip_http_version 1.1;
+  gzip_http_version 1.0;
   gzip_vary on;
   gzip_comp_level   6;
   gzip_proxied      any;
@@ -56,72 +66,39 @@ http {
                     application/xml \
                     application/xml+rss \
                     text/javascript;
+                    # image/png; consider adding this to the above list. png images compress fairly well
+
   # make sure gzip does not lose large gzipped js or css files
   # see http://blog.leetsoft.com/2007/7/25/nginx-gzip-ssl
   gzip_buffers 16 8k;
 
   # Disable gzip for certain browsers. IE6 prior to SP2 doesn't handle gzip properly.
   gzip_disable “MSIE [1-6].(?!.*SV1)”;
-  
+
+  ## Log and Format settings
+  log_format main '$remote_addr [$time_local] '
+                  '"$scheme $host $request" $status $body_bytes_sent "$http_referer" '
+                  '"$http_user_agent" "$http_x_forwarded_for" '
+                  '($request_time)';
+
+  access_log  /mnt/log/nginx/access.log  main;
+
+  # main error log - Do not comment out. If you do not want the log file set this to /dev/null
+  # use debug instead of notice if you want additional information
+  error_log  /mnt/log/nginx/error.log notice;
+
+
+  #### Server settings
+
+  ## Deny access to any host other than (www.)mydomain.com or others listed below
   server {
-    listen 80;
-    server_name _;
-    
-    # server-specific passenger settings
-    passenger_enabled on;
-    passenger_use_global_queue on;
-    rails_env <%= rails_env %>;
+    server_name  _;  #default
+    return 444;
+  }
 
-    # Set the max size for file uploads to 50Mb
-    client_max_body_size 50M;
-
-    # uncomment to force a redirect to www
-    # if ($host ~* "^[ec2onrails].com$"){
-    #   rewrite ^(.*)$ http://www.[ec2onrails].com$1 permanent;
-    #   break;
-    # }
-    
-    # uncomment if you want to allow or force some or all pages to go to http:// instead of https://
-    # if redirecting all to https, you won't need any of the other directives below their rewrite/break
-    # set $sub 'www';
-    # if  ($host ~* "^(.+?)\.[ec2onrails].com$"){
-    #        set $sub $1;
-    # }
-    # 
-    # if ( $uri ~* "^/.+$") {
-    #    rewrite ^(.*)$ https://$sub.[ec2onrails].com$1 permanent;
-    #    break;
-    # }
-    
-    root /mnt/app/current/public;
-
-    error_page   400 /400.html;
-    error_page   500 502 503 504  /500.html;
-    location = /500.html {
-      root /mnt/app/current/public;
-    }
-    
-    #hide hidden files and folders
-    location ~ /\..+ {
-      deny  all;
-    }
-    
-    #do not show the nginx version number in the server header
-    server_tokens off;
-    
-    # this allows people to use images and css in their maintenance.html file
-    if ($request_filename ~* \.(css|jpg|gif|png)$) {
-	    break;
-    }
-		
-    # this rewrites all the requests to the maintenance.html
-    # page if it exists in the doc root. This is for capistrano's
-    # disable web task
-    if (-f $document_root/system/maintenance.html) {
-      rewrite  ^(.*)$  /system/maintenance.html last;
-      break;
-    }
-    
+  ## The nginx status server for god monitoring
+  server {
+    listen 127.0.0.1:80;
     # see http://wiki.codemongers.com/NginxHttpStubStatusModule
     # for more information
     location /nginx_status {
@@ -132,21 +109,92 @@ http {
         allow 127.0.0.1;
         deny all;
     }
-    
-    include /etc/nginx/custom.conf;
   }
   
-  # This server is setup for ssl. Uncomment if 
-  # you are using ssl as well as port 80.
+  ## Your Image asset server
+  server {
+    listen 80;
+    server_name assets.[ec2onrails].com assets0.[ec2onrails].com assets1.[ec2onrails].com assets2.[ec2onrails].com assets3.[ec2onrails].com;
+    root /mnt/app/current/public;
+
+    ## Only allow GET and HEAD request methods
+     if ($request_method !~ ^(GET|HEAD)$ ) {
+        return 444;
+     }
+
+    # set Expire header on assets: see http://developer.yahoo.com/performance/rules.html#expires
+    location ~ ^/(images|javascripts|stylesheets)/ {
+      expires 1y;
+    }
+
+    error_page   400 /400.html;
+    error_page   500 502 503 504  /500.html;
+    location = /500.html {
+      root /mnt/app/current/public;
+    }
+    #hide hidden files and folders
+    location ~ /\..+ {
+      deny  all;
+    }
+  }
+
+  ## Your main server
+  server {
+    listen 80;
+    server_name [ec2onrails].com www.[ec2onrails].com;
+    
+    # This restricts users to 5 connections based on IP address based on https://calomel.org/nginx.html.
+    # limit_conn  jailhouse 5;
+
+    # server-specific passenger settings
+    passenger_enabled on;
+    passenger_use_global_queue on;
+    rails_env <%= rails_env %>;
+
+    root /mnt/app/current/public;
+
+    # force a redirect to www
+    # if ($host ~* "^[ec2onrails].com$"){
+    #   rewrite ^(.*)$ http://www.[ec2onrails].com$1 permanent;
+    #   break;
+    # }
+
+    # uncomment if you want to allow or force some or all pages to go to http:// instead of https://
+    # if redirecting all to https, you won't need any of the other directives below their rewrite/break
+    # set $sub 'www';
+    # if  ($host ~* "^(.+?)\.[ec2onrails].com$"){
+    #        set $sub $1;
+    # }
+    #
+    # if ( $uri ~* "^/.+$") {
+    #    rewrite ^(.*)$ https://$sub.[ec2onrails].com$1 permanent;
+    #    break;
+    # }
+
+    # Many of of the important options that would apply to all servers are in the server-common.conf file.
+    include /etc/nginx/server-common.conf;
+    include /etc/nginx/custom.conf;
+  }
+
+  ## Your ssl server
+  # Uncomment if you are using ssl as well as port 80.
   # server {
   #   # port to listen on. Can also be set to an IP:PORT
   #   listen 443;
-  #
+  # 
   #   ssl                  on;
-  #   ssl_certificate      /etc/nginx/your_cert.crt;
-  #   ssl_certificate_key  /etc/nginx/your_cert.key;
-  #
-  #   TODO SSL support
-  #
+  #   ssl_certificate      /etc/ssl/certs/your_cert.crt;
+  #   ssl_certificate_key  /etc/ssl/private/your_cert.key;
+  # 
+  #   # server-specific passenger settings
+  #   passenger_enabled on;
+  #   passenger_use_global_queue on;
+  #   rails_env production;
+  # 
+  #   root /mnt/app/current/public;
+  # 
+  #   include /etc/nginx/server-common.conf;
+  #   include /etc/nginx/custom-ssl.conf;
   # }
+
 }
